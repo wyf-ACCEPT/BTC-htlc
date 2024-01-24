@@ -1,7 +1,5 @@
 const axios = require('axios');
 const bitcoin = require('bitcoinjs-lib')
-const bs58 = require('bs58')
-const https = require('https');
 const tinysecp = require('tiny-secp256k1')
 const { ECPairFactory } = require('ecpair')
 require('dotenv').config()
@@ -74,7 +72,7 @@ async function main() {
   })
   console.log("\nNew tx hash: ", response.data);
   console.log("View on the explorer: ", `https://mempool.space/signet/tx/${response.data}`)
-  
+
   console.log("\nFinished!")
 }
 

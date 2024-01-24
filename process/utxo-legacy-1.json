@@ -1,0 +1,52 @@
+{
+    "result": {
+        "txid": "7036df7cee49502b26fa6f8992335a0f15ddaabfde308ef61f06cfcb1d35f821",
+        "hash": "13889f10782cbc7ab798918d1d271c219ca2c641958768016a4a61abcf802945",
+        "version": 2,
+        "size": 225,
+        "vsize": 144,
+        "weight": 573,
+        "locktime": 179348,
+        "vin": [
+            {
+                "txid": "15384d384d9cc8124c0d01beeeaffb46ccbf48f90494365a07223ffc53a5fec4",
+                "vout": 0,
+                "scriptSig": {
+                    "asm": "",
+                    "hex": ""
+                },
+                "txinwitness": [
+                    "304402201ef434cfa1e014546c92e7097484d64bfed75d2f0092c9991370d2f2e2cf2f7402203e42e87b7e4c7ec2458c5c4f3d7559af0975433fd05eac5db370add4ef7f7a6801",
+                    "038d60413a2b5415fc0419edb65c02ac59199f1036793fb3e8d2a617b6c5bf8d4d"
+                ],
+                "sequence": 4294967294
+            }
+        ],
+        "vout": [
+            {
+                "value": 0.00100000,
+                "n": 0,
+                "scriptPubKey": {
+                    "asm": "OP_DUP OP_HASH160 ce90de3517b68084878655f3c5b3f2f4c24840ca OP_EQUALVERIFY OP_CHECKSIG",
+                    "desc": "addr(1KqDk85RNc7YuUuzdp6fVRBRr5BGKjJmPR)#xdlpxts3",
+                    "hex": "76a914ce90de3517b68084878655f3c5b3f2f4c24840ca88ac",
+                    "address": "1KqDk85RNc7YuUuzdp6fVRBRr5BGKjJmPR",
+                    "type": "pubkeyhash"
+                }
+            },
+            {
+                "value": 69609.52800731,
+                "n": 1,
+                "scriptPubKey": {
+                    "asm": "0 777913fb5808f263329484873cf4388f09878525",
+                    "desc": "addr(bc1qwau3876cprexxv55sjrneapc3uyc0pf95h2jc3)#e5wwqy8l",
+                    "hex": "0014777913fb5808f263329484873cf4388f09878525",
+                    "address": "bc1qwau3876cprexxv55sjrneapc3uyc0pf95h2jc3",
+                    "type": "witness_v0_keyhash"
+                }
+            }
+        ]
+    },
+    "error": null,
+    "id": null
+} 

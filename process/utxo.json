@@ -1,0 +1,51 @@
+{
+    "result": {
+        "txid": "0935e21a66060cd0478d0052437c642dcac273a323e296789fa93806a62ae8fb",
+        "hash": "107f1781ac52f03ea2dd9a7db273a34a26009bbb07b291b07716570c4cbcf3a5",
+        "version": 1,
+        "size": 205,
+        "vsize": 154,
+        "weight": 616,
+        "locktime": 0,
+        "vin": [
+            {
+                "txid": "c37bdaf612c523dc4eee006199b9028f2a60df0c0b0a749331ba141567071a51",
+                "vout": 1,
+                "scriptSig": {
+                    "asm": "",
+                    "hex": ""
+                },
+                "txinwitness": [
+                    "4b18d935836b807d322555fd54e8a1aa4cc1110b816cc4fd1e37f7f81e111c77abbc80c967b9ed8b6ee0b191835158b89d9955b396f5a167f6024e7a0028b302"
+                ],
+                "sequence": 4294967285
+            }
+        ],
+        "vout": [
+            {
+                "value": 0.00002066,
+                "n": 0,
+                "scriptPubKey": {
+                    "asm": "1 100a701adf70b9c84cf7735ad6425f48251a9a1d7bca127986dc03112a1a2392",
+                    "desc": "rawtr(100a701adf70b9c84cf7735ad6425f48251a9a1d7bca127986dc03112a1a2392)#eswqctrs",
+                    "hex": "5120100a701adf70b9c84cf7735ad6425f48251a9a1d7bca127986dc03112a1a2392",
+                    "address": "bc1pzq98qxklwzuusn8hwdddvsjlfqj34xsa009py7vxmsp3z2s6ywfqv5had9",
+                    "type": "witness_v1_taproot"
+                }
+            },
+            {
+                "value": 0.01428084,
+                "n": 1,
+                "scriptPubKey": {
+                    "asm": "1 2439d09a4f32f68063ca7ad812c3069c4d22c554c3ff365f8b4a94c100e2bf2f",
+                    "desc": "rawtr(2439d09a4f32f68063ca7ad812c3069c4d22c554c3ff365f8b4a94c100e2bf2f)#xkm5g737",
+                    "hex": "51202439d09a4f32f68063ca7ad812c3069c4d22c554c3ff365f8b4a94c100e2bf2f",
+                    "address": "bc1pysuapxj0xtmgqc720tvp9scxn3xj9325c0lnvhutf22vzq8zhuhshpkxrf",
+                    "type": "witness_v1_taproot"
+                }
+            }
+        ]
+    },
+    "error": null,
+    "id": null
+}

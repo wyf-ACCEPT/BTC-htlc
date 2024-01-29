@@ -38,7 +38,7 @@ async function main() {
     // bitcoin.opcodes.OP_SHA256,
     // bitcoin.script.number.encode(hash),
     hash,
-    bitcoin.opcodes.OP_EQUALVERIFY,
+    bitcoin.opcodes.OP_EQUAL,
   ])
   console.log("\nThe hash value of HTLC: ", '0x' + hash.toString('hex'))
   console.log("The HTLC script (hex) : ", '0x' + hashLockScript.toString('hex'))

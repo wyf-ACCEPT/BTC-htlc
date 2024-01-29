@@ -31,7 +31,7 @@ async function main() {
   // See https://signet.bc-2.jp/ 
 
   // Information about txid1
-  const txid1 = "e85b4585d8f27737f8176427643958400f63b7359287dc65113c9a908b662aae"
+  const txid1 = "ba5fcd76e75017303b0b3273aa9ce2edd9326981e724592059d442311ecbd999"
   const lockAmount = 2000
   const secret = Buffer.from('hi')
   const hash = sha256(secret)
@@ -39,8 +39,17 @@ async function main() {
     // bitcoin.opcodes.OP_SHA256,
     // bitcoin.script.number.encode(hash),
     hash,
-    bitcoin.opcodes.OP_EQUALVERIFY,
+    bitcoin.opcodes.OP_EQUAL,
   ])
+
+  const hashLockScript2 = bitcoin.script.fromASM(
+    `${hash.toString('hex')} OP_EQUAL`.trim()
+    .replace(/\s+/g, ' ')
+  )
+  
+  console.log(hashLockScript)
+  console.log(hashLockScript2)
+
   url = `${signetBaseUrl}/tx/${txid1}/hex`
   response = await fetch(url)
   const txHex1 = await response.text()
@@ -56,8 +65,7 @@ async function main() {
   const redeemScriptSig = bitcoin.payments.p2sh({
     redeem: {
       input: bitcoin.script.compile([
-        bitcoin.opcodes.OP_TRUE,
-        bitcoin.script.number.encode(hash),
+        hash
       ]),
       output: hashLockScript,
     },

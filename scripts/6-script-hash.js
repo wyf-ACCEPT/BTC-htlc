@@ -13,11 +13,12 @@ const sha256 = bitcoin.crypto.sha256
 const validator = (pubkey, msghash, signature,) =>
   ECPair.fromPublicKey(pubkey).verify(msghash, signature)
 
+
 function utcNow() {
   return Math.floor(Date.now() / 1000);
 }
 
-function getOutputScript() {
+function getOutputScript(hash) {
   return bitcoin.script.fromASM(
     `
     OP_SHA256
@@ -29,7 +30,7 @@ function getOutputScript() {
   )
 }
 
-function getInputScript() {
+function getInputScript(secret) {
   return bitcoin.script.fromASM(
     `
       ${secret.toString('hex')}
@@ -39,11 +40,13 @@ function getInputScript() {
   )
 }
 
+
 async function main() {
   // Load wallet
-  const pkWIF = process.env.PK_TEST
-  const alice = ECPair.fromWIF(pkWIF, network)
-  const bob = ECPair.fromWIF(pkWIF, network)
+  const pkWIF1 = process.env.PK_TEST
+  const pkWIF2 = process.env.PK_TEST2
+  const alice = ECPair.fromWIF(pkWIF1, network)
+  const bob = ECPair.fromWIF(pkWIF2, network)
 
   const { address: aliceAddress } = bitcoin.payments.p2pkh({
     pubkey: alice.publicKey, network
@@ -63,7 +66,7 @@ async function main() {
   const lockTime = bip65.encode({ utc: utcNow() - 3600 * 3 });
   const secret = Buffer.from('hi')
   const hash = sha256(secret)
-  const redeemScript = getOutputScript()
+  const redeemScript = getOutputScript(hash)
   const { address: p2shAddress } = bitcoin.payments.p2sh({
     redeem: { output: redeemScript, network },
     network,
@@ -73,15 +76,13 @@ async function main() {
   // Get UTXOs
   let url, response, data
   url = `${signetBaseUrl}/address/${aliceAddress}/utxo`
-  response = await fetch(url)
-  data = await response.json()
+  response = await fetch(url); data = await response.json()
   const availableUtxos = data.filter(x => x.value > 10000)
-  if (availableUtxos.length == 0)
-    throw new Error("No available UTXO!")
+  if (availableUtxos.length == 0) throw new Error("No available UTXO!")
   let utxo0 = availableUtxos[0]
   console.log("\nWe use this utxo: ", utxo0.txid)
 
-  // Get the detailed tx (hex)
+  // Get the detailed tx (hex) of the utxo
   url = `${signetBaseUrl}/tx/${utxo0.txid}/hex`
   response = await fetch(url)
   const txHex0 = await response.text()
@@ -111,30 +112,26 @@ async function main() {
   // Send the first transaction
   url = `${signetBaseUrl}/tx`
   response = await axios.post(url, txHex1, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
   })
   const txid1 = response.data
-  console.log("\nNew tx hash: ", txid1)
+  console.log("\nTx-1 hash: ", txid1)
   console.log("View on the explorer: ", `https://mempool.space/signet/tx/${txid1}`)
-  console.log("\nFinished!")
 
-  // constrcut the second tx
+  // Construct the second transaction
   const tx2 = new bitcoin.Transaction()
   tx2.locktime = lockTime
   tx2.addInput(Buffer.from(txid1, 'hex').reverse(), 0, 0xfffffffe)
   tx2.addOutput(bitcoin.address.toOutputScript(aliceAddress, network), lockAmount - 300)
 
-  // {Alice's signature} OP_TRUE
-  const hashType = bitcoin.Transaction.SIGHASH_ALL
-  const signatureHash = tx2.hashForSignature(0, redeemScript, hashType);
+  //   const hashType = bitcoin.Transaction.SIGHASH_ALL
+  //   const signatureHash = tx2.hashForSignature(0, redeemScript, hashType);
   const redeemScriptSig = bitcoin.payments.p2sh({
     redeem: {
-      input: getInputScript(),
+      input: getInputScript(secret),
       output: redeemScript,
     },
-  }).input;
+  }).input
   tx2.setInputScript(0, redeemScriptSig)
   const txHex2 = tx2.toHex()
   console.log("\nConstruct the second transaction:", txHex2)
@@ -142,13 +139,12 @@ async function main() {
   // Send the second transaction
   url = `${signetBaseUrl}/tx`
   response = await axios.post(url, txHex2, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
   })
-  console.log("\nNew tx hash: ", response.data)
+  console.log("\nTx-2 hash: ", response.data)
   const txid2 = response.data
   console.log("View on the explorer: ", `https://mempool.space/signet/tx/${txid2}`)
+
   console.log("\nFinished!")
 }
 

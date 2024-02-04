@@ -3,6 +3,8 @@ const bip65 = require('bip65')
 const bitcoin = require('bitcoinjs-lib')
 const tinysecp = require('tiny-secp256k1')
 const { ECPairFactory } = require('ecpair')
+const { toXOnly } = require('bitcoinjs-lib/src/psbt/bip371')
+
 require('dotenv').config()
 
 bitcoin.initEccLib(tinysecp)
@@ -19,14 +21,21 @@ function utcNow() {
 }
 
 function getOutputScript(
-  hash, expireTs, aliceAddressHex, bobAddressHex
+  encodedSwapHex, expireTs, aliceAddressHex, bobAddressHex
 ) {
   return bitcoin.script.fromASM(
+    /**
+     * Branch 1: Bob unlock before `expireTs` using `secret`
+     *           or using Alice's signature...?
+     *     `OP_SHA256 <hash> OP_EQUALVERIFY`
+     * ->  `<encodedSwap> OP_DROP OP_CHECKSIGVERIFY`
+     * Branch 2: Alice unlock after `expireTs` directly
+     */
     `
     OP_IF
-      OP_SHA256 
-      ${hash.toString('hex')} 
-        OP_EQUALVERIFY 
+      ${encodedSwapHex}
+      OP_DROP
+      
       OP_DUP 
         OP_HASH160
         ${bobAddressHex}
@@ -90,10 +99,19 @@ async function main() {
   const bobAddressHex = bitcoin.address
     .fromBase58Check(bobAddress, network).hash.toString('hex')
 
-  console.log("Alice's address: ", aliceAddress)
-  console.log("Alice's address (hex): ", aliceAddressHex)
-  console.log("Bob's address: ", bobAddress)
-  console.log("Bob's address (hex): ", bobAddressHex)
+  console.log("Alice's P2PKH address: ", aliceAddress)
+  console.log("Alice's P2PKH address (hex): ", aliceAddressHex)
+  console.log("Bob's P2PKH address: ", bobAddress)
+  console.log("Bob's P2PKH address (hex): ", bobAddressHex)
+
+  const { output: aliceP2trScript, address: aliceAddressP2tr } = bitcoin.payments.p2tr({
+    internalPubkey: toXOnly(alice.publicKey), network
+  })
+  const { output: bobP2trScript, address: bobAddressP2tr } = bitcoin.payments.p2tr({
+    internalPubkey: toXOnly(bob.publicKey), network
+  })
+  console.log("\nAlice's P2TR address: ", aliceAddressP2tr)
+  console.log("Bob's P2TR address: ", bobAddressP2tr)
 
   // Use faucet to get some tBTC
   // See https://signet.bc-2.jp/ 
@@ -102,7 +120,7 @@ async function main() {
    * First transaction 
    * - Bob unlock before `expireTs` using `secret`
    * - Or Alice unlock after `expireTs` using `secret`
-   */ 
+   */
   const lockAmount = 2000
   const expireTs = bip65.encode({ utc: utcNow() - 3600 * 2 })
   const secret = Buffer.from('hi')
@@ -163,7 +181,7 @@ async function main() {
    * Construct the second transaction
    * - `locktime` must be smaller than current timestamp (rule of Bitcoin)
    * - `locktime` must be greater than `expireTs` (rule of HTLC if enter the ELSE branch)
-   */ 
+   */
   const tx2 = new bitcoin.Transaction()
   tx2.locktime = bip65.encode({ utc: utcNow() - 5400 })   // [BUG/TODO] If <3000 it's not ok
   tx2.addInput(Buffer.from(txid1, 'hex').reverse(), 0, 0xfffffffe)

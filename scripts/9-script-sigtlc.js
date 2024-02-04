@@ -19,26 +19,25 @@ function utcNow() {
 }
 
 function getOutputScript(
-  hash, expireTs, aliceAddressHex, bobAddressHex
+  expireTs, aliceP2pkhAddressHex, bobP2pkhAddressHex
 ) {
   return bitcoin.script.fromASM(
     `
     OP_IF
-      OP_SHA256 
-      ${hash.toString('hex')} 
-        OP_EQUALVERIFY 
-      OP_DUP 
+      OP_DUP
         OP_HASH160
-        ${bobAddressHex}
+        ${bobP2pkhAddressHex}
+          OP_EQUALVERIFY
+      OP_CHECKSIGVERIFY
     OP_ELSE
       ${bitcoin.script.number.encode(expireTs).toString('hex')}
         OP_CHECKLOCKTIMEVERIFY
         OP_DROP
-      OP_DUP 
-        OP_HASH160
-        ${aliceAddressHex}
     OP_ENDIF
-    OP_EQUALVERIFY
+    OP_DUP
+      OP_HASH160
+      ${aliceP2pkhAddressHex}
+        OP_EQUALVERIFY
     OP_CHECKSIG
     `
       .trim()
@@ -46,12 +45,13 @@ function getOutputScript(
   )
 }
 
-function getInputScriptBob(secret, bobPubkey, bobSignature) {
+function getInputScriptBob(alicePubkey, aliceSignature, bobPubkey, bobSignature) {
   return bitcoin.script.fromASM(
     `
+    ${aliceSignature.toString('hex')}
+    ${alicePubkey.toString('hex')}
     ${bobSignature.toString('hex')}
     ${bobPubkey.toString('hex')}
-    ${secret.toString('hex')}
     OP_TRUE
     `
       .trim()
@@ -82,32 +82,32 @@ async function main() {
   const { address: aliceAddress } = bitcoin.payments.p2pkh({
     pubkey: alice.publicKey, network
   })
-  const aliceAddressHex = bitcoin.address
+  const aliceP2pkhAddressHex = bitcoin.address
     .fromBase58Check(aliceAddress, network).hash.toString('hex')
   const { address: bobAddress } = bitcoin.payments.p2pkh({
     pubkey: bob.publicKey, network
   })
-  const bobAddressHex = bitcoin.address
+  const bobP2pkhAddressHex = bitcoin.address
     .fromBase58Check(bobAddress, network).hash.toString('hex')
 
   console.log("Alice's address: ", aliceAddress)
-  console.log("Alice's address (hex): ", aliceAddressHex)
+  console.log("Alice's address (hex): ", aliceP2pkhAddressHex)
   console.log("Bob's address: ", bobAddress)
-  console.log("Bob's address (hex): ", bobAddressHex)
+  console.log("Bob's address (hex): ", bobP2pkhAddressHex)
 
   // Use faucet to get some tBTC
   // See https://signet.bc-2.jp/ 
 
   /**
    * First transaction 
-   * - Bob unlock before `expireTs` using `secret`
-   * - Or Alice unlock after `expireTs` using `secret`
-   */ 
+   * - Bob unlock before `expireTs` using Alice's signature and Bob's signature
+   * - Or Alice unlock after `expireTs` using Alice's signature
+   */
   const lockAmount = 2000
   const expireTs = bip65.encode({ utc: utcNow() - 3600 * 2 })
-  const secret = Buffer.from('hi')
-  const hash = sha256(secret)
-  const redeemScript = getOutputScript(hash, expireTs, aliceAddressHex, bobAddressHex)
+  const redeemScript = getOutputScript(
+    expireTs, aliceP2pkhAddressHex, bobP2pkhAddressHex
+  )
   const { address: p2shAddress } = bitcoin.payments.p2sh({
     redeem: { output: redeemScript, network },
     network,
@@ -159,29 +159,47 @@ async function main() {
   console.log("\nTx-1 hash: ", txid1)
   console.log("View on the explorer: ", `https://mempool.space/signet/tx/${txid1}`)
 
-  /**
-   * Construct the second transaction
-   * - `locktime` must be smaller than current timestamp (rule of Bitcoin)
-   * - `locktime` must be greater than `expireTs` (rule of HTLC if enter the ELSE branch)
-   */ 
+  // Construct the second transaction
   const tx2 = new bitcoin.Transaction()
-  tx2.locktime = bip65.encode({ utc: utcNow() - 5400 })   // [BUG/TODO] If <3000 it's not ok
   tx2.addInput(Buffer.from(txid1, 'hex').reverse(), 0, 0xfffffffe)
-  tx2.addOutput(bitcoin.address.toOutputScript(aliceAddress, network), lockAmount - 300)
-
   const hashType = bitcoin.Transaction.SIGHASH_ALL
-  const signatureHash = tx2.hashForSignature(0, redeemScript, hashType)
-  const aliceSignature = bitcoin.script.signature.encode(
-    alice.sign(signatureHash), hashType,
-  )
-  const bobSignature = bitcoin.script.signature.encode(
-    bob.sign(signatureHash), hashType,
-  )
+  let inputScript
 
+  // Choose to release the fund to Bob or Alice
+  const releaseToBob = false
+
+  if (releaseToBob) {
+    tx2.addOutput(bitcoin.address.toOutputScript(bobAddress, network), lockAmount - 500)
+
+    const signatureHash = tx2.hashForSignature(0, redeemScript, hashType)
+    const aliceSignature = bitcoin.script.signature.encode(
+      alice.sign(signatureHash), hashType,
+    )
+    const bobSignature = bitcoin.script.signature.encode(
+      bob.sign(signatureHash), hashType,
+    )
+    inputScript = getInputScriptBob(alice.publicKey, aliceSignature, bob.publicKey, bobSignature)
+  }
+  else {
+    /**
+     * If it's Alice's turn, she can unlock the fund, while:
+     * - `locktime` must be smaller than current timestamp (rule of Bitcoin)
+     * - `locktime` must be greater than `expireTs` (rule of HTLC if enter the ELSE branch)
+     */
+    tx2.locktime = bip65.encode({ utc: utcNow() - 3600 })   // [BUG/TODO] If <3000 it's not ok
+    tx2.addOutput(bitcoin.address.toOutputScript(aliceAddress, network), lockAmount - 500)
+
+    const signatureHash = tx2.hashForSignature(0, redeemScript, hashType)
+    const aliceSignature = bitcoin.script.signature.encode(
+      alice.sign(signatureHash), hashType,
+    )
+    inputScript = getInputScriptAlice(alice.publicKey, aliceSignature)
+  }
+
+  // Continue to construct the second transaction
   const redeemScriptSig = bitcoin.payments.p2sh({
     redeem: {
-      input: getInputScriptBob(secret, bob.publicKey, bobSignature),
-      // input: getInputScriptAlice(alice.publicKey, aliceSignature),
+      input: inputScript,
       output: redeemScript,
     },
   }).input

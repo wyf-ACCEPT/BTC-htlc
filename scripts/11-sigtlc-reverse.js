@@ -73,7 +73,6 @@ function getInputScriptAlice(alicePubkey, aliceSignature) {
   )
 }
 
-
 async function main() {
   // Load wallet
   const pkWIF1 = process.env.PK_TEST
@@ -163,53 +162,53 @@ async function main() {
   console.log("View on the explorer: ", `https://mempool.space/signet/tx/${txid1}`)
 
   // Construct the second transaction
-  // See https://bitcoinjs-guide.bitcoin-studio.com/bitcoinjs-guide/v5/part-three-pay-to-script-hash/timelocks/cltv_p2sh
-  const psbt2 = new bitcoin.Psbt({ network })
-  psbt2.addInput({
-    hash: txid1,
-    index: 0,
-    sequence: 0xfffffffe,
-    nonWitnessUtxo: Buffer.from(txHex1, 'hex'),
-    redeemScript: Buffer.from(redeemScript, 'hex')
-  })
-  psbt2.addOutput({
-    address: bobAddress,
-    value: 1200,
-  })
+  const tx2 = new bitcoin.Transaction()
+  tx2.addInput(Buffer.from(txid1, 'hex').reverse(), 0, 0xfffffffe)
+  const hashType = bitcoin.Transaction.SIGHASH_ALL
+  let inputScript
 
-  psbt2.signInput(0, alice)
-  psbt2.signInput(0, bob)
+  // Choose to release the fund to Bob or Alice
+  const releaseToBob = false
 
-  const getFinalScripts = (inputIndex, input, script) => {
-    // Step 1: Check to make sure the meaningful locking script matches what you expect.
-    const decompiled = bitcoin.script.decompile(script)
-    if (!decompiled || decompiled[0] !== bitcoin.opcodes.OP_IF) {
-      throw new Error(`Can not finalize input #${inputIndex}`)
-    }
-  
-    // Step 2: Create final scripts
-    const paymentFirstBranch = bitcoin.payments.p2sh({
-      redeem: {
-        // input: getInputScriptAlice(alice.publicKey, input.partialSig[0].signature),
-        input: getInputScriptBob(
-          alice.publicKey, input.partialSig[0].signature,
-          bob.publicKey, input.partialSig[1].signature,
-        ),
-        output: redeemScript
-      }
-    })
-  
-    return {
-      finalScriptSig: paymentFirstBranch.input
-    }
+  if (releaseToBob) {
+    tx2.addOutput(bitcoin.address.toOutputScript(bobAddress, network), lockAmount - 500)
+
+    const signatureHash = tx2.hashForSignature(0, redeemScript, hashType)
+    const aliceSignature = bitcoin.script.signature.encode(
+      alice.sign(signatureHash), hashType,
+    )
+    const bobSignature = bitcoin.script.signature.encode(
+      bob.sign(signatureHash), hashType,
+    )
+    inputScript = getInputScriptBob(alice.publicKey, aliceSignature, bob.publicKey, bobSignature)
   }
-  
-  psbt2.finalizeInput(0, getFinalScripts)
-  const txHex2 = psbt2.extractTransaction().toHex()
-  console.log("\nConstruct the second transaction:", txHex2)
-  console.log("\nThe full PSBT transaction hex string:", psbt2.toHex())
+  else {
+    /**
+     * If it's Alice's turn, she can unlock the fund, while:
+     * - `locktime` must be smaller than current timestamp (rule of Bitcoin)
+     * - `locktime` must be greater than `expireTs` (rule of HTLC if enter the ELSE branch)
+     */
+    tx2.locktime = bip65.encode({ utc: utcNow() - 3600 })   // [BUG/TODO] If <3000 it's not ok
+    tx2.addOutput(bitcoin.address.toOutputScript(aliceAddress, network), lockAmount - 500)
 
-  
+    const signatureHash = tx2.hashForSignature(0, redeemScript, hashType)
+    const aliceSignature = bitcoin.script.signature.encode(
+      alice.sign(signatureHash), hashType,
+    )
+    inputScript = getInputScriptAlice(alice.publicKey, aliceSignature)
+  }
+
+  // Continue to construct the second transaction
+  const redeemScriptSig = bitcoin.payments.p2sh({
+    redeem: {
+      input: inputScript,
+      output: redeemScript,
+    },
+  }).input
+  tx2.setInputScript(0, redeemScriptSig)
+  const txHex2 = tx2.toHex()
+  console.log("\nConstruct the second transaction:", txHex2)
+
   // Send the second transaction
   url = `${signetBaseUrl}/tx`
   response = await axios.post(url, txHex2, {
@@ -279,17 +278,4 @@ main()
  * 6a4730440220211320401467446b842a603d3b3196f50d5862d41bb7ad3a22196dd20cf1cd60022064dc81f2e936499480e7cec26b0d0c8491f7b4d6086a84388df7f02c3d33666401210254393167303dfc20d60d60d3ec55873f3bb01823da7a072a02cfc1697ef4ed10
  * []  ffffffff02d00700000000000017a9144e9dd560003348b8f13a9a9ca521240a052eff2a87
  * 88fd0b00000000001976a914ce90de3517b68084878655f3c5b3f2f4c24840ca88ac00000000
- * 
- * 
- * 
- * 
- * 3044022009b64f39f5a76405f694ebb3cfbc03d723e20413fb1ca0bfb7c70c4dd59e760302206008cfd48f7b2a44dce533b0a3f081f5a83d22f3830bf574be0ec3a87d786ff201
- * 21
- * 0254393167303dfc20d60d60d3ec55873f3bb01823da7a072a02cfc1697ef4ed10ffffffff02d00700000000000017a914a89e5afddbde53457d227b54c0563579415d91e68768e10b00000000001976a914ce90de3517b68084878655f3c5b3f2f4c24840ca88ac00000000
- * 
- * a914a89e5afddbde53457d227b54c0563579415d91e68768e10b00000000001976a914ce90de3517b68084878655f3c5b3f2f4c24840ca88ac00000000
- * 
- * 63200100350c5280c400a97422bb2acd672000000dbba00065c2326168680f03c6027576a914002483c2041ccb861a40e12346d3c2478b4aecce88ad6704856dc465b1756876a914ce90de3517b68084878655f3c5b3f2f4c24840ca88acfeffffff01dc050000000000001976a914002483c2041ccb861a40e12346d3c2478b4aecce88ac0000000001000000
- * 
- * 304502210088c2574e141b3746c272956b2c51575ffd5ab55a6c8b83a55b516fa1f93bd54a022072f1d44608c9c261bf6b8f7fdea9cd0a4bdb3aa15c2fc995b182851a64bf1f3401210254393167303dfc20d60d60d3ec55873f3bb01823da7a072a02cfc1697ef4ed10ffffffff02d00700000000000017a91476ea6236bd07fb4b4e298cab2ac17e4f0419bade8774c60b00000000001976a914ce90de3517b68084878655f3c5b3f2f4c24840ca88ac00000000
  */

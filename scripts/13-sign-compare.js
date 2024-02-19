@@ -3,6 +3,7 @@ const bip65 = require('bip65')
 const bitcoin = require('bitcoinjs-lib')
 const tinysecp = require('tiny-secp256k1')
 const { ECPairFactory } = require('ecpair')
+const { Wallet, ethers } = require('ethers')
 require('dotenv').config()
 
 bitcoin.initEccLib(tinysecp)
@@ -45,68 +46,6 @@ function getScriptOutputLock(
   )
 }
 
-function getScriptInputRelease(userPubkey, userSignature) {
-  return bitcoin.script.fromASM(
-    `
-    ${userSignature.toString('hex')}
-    ${userPubkey.toString('hex')}
-    OP_TRUE
-    `
-      .trim()
-      .replace(/\s+/g, ' '),
-  )
-}
-
-function getScriptInputCancel(lpPubkey, lpSignature) {
-  return bitcoin.script.fromASM(
-    `
-    ${lpSignature.toString('hex')}
-    ${lpPubkey.toString('hex')}
-    OP_FALSE
-    `
-      .trim()
-      .replace(/\s+/g, ' '),
-  )
-}
-
-function getFinalizeRelease(redeemScript, userPubkey) {
-  function getFinalizeReleaseInternal(inputIndex, input, script) {
-    const decompiled = bitcoin.script.decompile(script)
-    if (!decompiled || decompiled[0] !== bitcoin.opcodes.OP_IF) {
-      throw new Error(`Can not finalize input #${inputIndex}`)
-    }
-    const payment = bitcoin.payments.p2sh({
-      redeem: {
-        input: getScriptInputRelease(
-          userPubkey, input.partialSig[0].signature
-        ),
-        output: redeemScript
-      }
-    })
-    return { finalScriptSig: payment.input }
-  }
-  return getFinalizeReleaseInternal
-}
-
-function getFinalizeCancelRelease(redeemScript, lpPubkey) {
-  function getFinalizeCancelReleaseInternal(inputIndex, input, script){
-    const decompiled = bitcoin.script.decompile(script)
-    if (!decompiled || decompiled[0] !== bitcoin.opcodes.OP_IF) {
-      throw new Error(`Can not finalize input #${inputIndex}`)
-    }
-    const payment = bitcoin.payments.p2sh({
-      redeem: {
-        input: getScriptInputCancel(
-          lpPubkey, input.partialSig[0].signature
-        ),
-        output: redeemScript
-      }
-    })
-    return { finalScriptSig: payment.input }
-  }
-  return getFinalizeCancelReleaseInternal
-}
-
 async function broadcastTransaction(psbt) {
   const txHex = psbt.extractTransaction().toHex()
   console.log("\nConstructed the transaction:", txHex)
@@ -144,15 +83,7 @@ async function main() {
   console.log("User's P2PKH address: ", userAddress)
   console.log("User's P2PKH address (hex): ", userAddressHex)
 
-  // Use faucet to get some tBTC
-  // See https://signet.bc-2.jp/ 
-
-  /**
-   * First transaction: Announce the script and calculate the script hash (P2SH address).
-   * The script can be unlock by the following methods:
-   * - User unlock before `expireTs` using LP's signature and User's signature
-   * - Or LP unlock after `expireTs` using LP's signature
-   */
+  // Send some bitcoin to the P2SH's address
   const lockAmount = 2000
   const expireTs = bip65.encode({ utc: utcNow() - 3600 * 3 })
   const encodedSwapHex = "0100350c5280c400a97422bb2acd672000000dbba00065c2326168680f03c602"
@@ -179,7 +110,6 @@ async function main() {
   const txHex0 = await response.text()
   console.log("\nThe hex string of this utxo:", txHex0.slice(0, 32) + '...')
 
-
   // Construct the first transaction
   const psbt1 = new bitcoin.Psbt({ network })
   psbt1.addInput({
@@ -196,48 +126,75 @@ async function main() {
     value: utxo0.value - lockAmount - 300
   })
 
-  psbt1.signInput(0, lp)
+
+  /**
+   * Use unisat to sign, and validate in ethers.
+   */
+
+  // 1. Sign the transaction via unisat or bitcoinjs
+  const inputIndex = 0
+  psbt1.signInput(inputIndex, lp)
+  const signatureBtcRaw = psbt1.data.inputs[inputIndex].partialSig[0].signature
+  console.log(`\nSignature from bitcoinjs (length = ${signatureBtcRaw.length}): `, 
+    signatureBtcRaw.toString('hex'))
+  const flag = signatureBtcRaw.length == 72 ? 1 : 0
+  const signatureBtcRawOffset = signatureBtcRaw.toString('hex').slice(8 + flag * 2)
+  const signatureBtc = {
+    r: '0x' + signatureBtcRawOffset.slice(0, 64),
+    s: '0x' + signatureBtcRawOffset.slice(68, 132),
+    // yParity: signatureBtcRaw.toString('hex').slice(140, 142) == '01' ? 1 : 0,
+    // v: 27 + signatureBtcRaw.toString('hex').slice(140, 142) == '01' ? 1 : 0,
+    serialized: '0x' + signatureBtcRawOffset.slice(0, 64) + signatureBtcRawOffset.slice(68, 132) + '1c',  // what about v?
+  }
+
+  // 2. Obtain the transaction hash
+  const _unsignedTx = psbt1.data.globalMap.unsignedTx.tx
+  const _prevoutIndex = _unsignedTx.ins[inputIndex].index
+  const txHash = _unsignedTx.hashForSignature(
+    inputIndex, 
+    bitcoin.Transaction.fromBuffer(psbt1.data.inputs[inputIndex].nonWitnessUtxo)
+      .outs[_prevoutIndex].script, 
+    bitcoin.Transaction.SIGHASH_ALL,
+  )
+  console.log("Transaction hash to sign: ", txHash.toString('hex'))
+  
+  // 3. Sign the transaction via ethers
+  const lpEthers = new Wallet(lp.privateKey.toString('hex'))
+  const signatureEthers = lpEthers.signingKey.sign(txHash)
+
+  console.log("r value is equal: ", signatureBtc.r == signatureEthers.r)
+  console.log("s value is equal: ", signatureBtc.s == signatureEthers.s)
+  // console.log("bitcoin sig length   : ", flag)
+  // console.log("ethers  yParity      : ", signatureEthers.yParity)
+  // console.log("bitcoin last 1 bytes : ", signatureBtcRaw.toString('hex').slice(-2))
+
+  // 4. Verify the signature via ethers
+  console.log("Recovered address: ", ethers.recoverAddress(txHash, signatureBtc.serialized))
+  console.log("Original  address: ", lpEthers.address)
+
+  // 5. Verify the signature via solidity
+  // @openzeppelin: ECDSA.recover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)
+
+  // 6. Verify the signature via bitcoin script
+  // See the user journey in ./12-unisat.js
+
+  
   psbt1.validateSignaturesOfInput(0, validator)
   psbt1.finalizeAllInputs()
 
-  const txid1 = await broadcastTransaction(psbt1)
+  /**
+   * hash:   1dd2c6e729e1b669d5a3adf124edf050b9a8903b499fcd1bbb288b7b93c2d36b
+   * sig:    bc550c8805bce4a581319f85e442e11841485800b0ada9421c0ce55e62e8cd35
+   *         019a2373dad527595e99d8727d44e49fe728e92d71e0ecbae42d34cc605257b7
+   * lp-pk:  f04b9a36c97c42064fdd0ad9c5bcc364f7efe4cb1d0ca008ad41e6fa03fee072
+   * lp-pub: 02 54393167303dfc20d60d60d3ec55873f3bb01823da7a072a02cfc1697ef4ed10
+   * 
+   * 30 44 02 20 7368b42b0a6715ab9380d01475744cd041e37a90cf6817091c22a0a7cb19fd7f
+   *       02 20 3e117cf1bf89d30942ca523b040d46b279133d64c6fc06bedfb110bacf7b4886 01
+   * 30 45 02 21 00
+   */
 
 
-  // Construct the second transaction
-  // See https://bitcoinjs-guide.bitcoin-studio.com/bitcoinjs-guide/v5/part-three-pay-to-script-hash/timelocks/cltv_p2sh
-  const psbt2 = new bitcoin.Psbt({ network })
-  psbt2.addInput({
-    hash: txid1,
-    index: 0,
-    sequence: 0xfffffffe,
-    nonWitnessUtxo: Buffer.from(psbt1.extractTransaction().toHex(), 'hex'),
-    redeemScript: Buffer.from(redeemScript, 'hex')
-  })
-
-  const releaseToUser = false
-
-  if(releaseToUser) {
-    psbt2.addOutput({
-      address: userAddress,
-      value: 1200,
-    })
-    psbt2.signInput(0, user)
-    psbt2.finalizeInput(0, getFinalizeRelease(redeemScript, user.publicKey))
-  } 
-  else {
-    psbt2.addOutput({
-      address: lpAddress,
-      value: 1200,
-    })
-    psbt2.setLocktime(utcNow() - 3600 * 2)
-    psbt2.signInput(0, lp)
-    psbt2.finalizeInput(0, getFinalizeCancelRelease(redeemScript, lp.publicKey))
-  }
-
-  await broadcastTransaction(psbt2)
-
-  console.log("\nFinished!")
 }
 
 main()
-

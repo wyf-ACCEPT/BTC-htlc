@@ -162,7 +162,7 @@ async function main() {
    */
   console.log(
     "\nPaste this code snippet into Chrome:",
-    `\n\x1b[32mawait unisat.sendBitcoin("${redeemScriptAddress}", ${lockAmount})\x1b[0m`
+    `\n\x1b[32mawait unisat.sendBitcoin("${redeemScriptAddress}", ${lockAmount}, { feeRate: 2 })\x1b[0m`
   )
 
   const txid1 = readlineSync.question('\nInput your txid (from Chrome): ')

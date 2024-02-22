@@ -1,0 +1,35 @@
+bitcoin sig length    :  72
+ethers  yParity       :  0
+bitcoin last   1 byte :  01
+bitcoin first  5 bytes:  3045022100
+bitcoin middle 2 bytes:  0220
+
+bitcoin sig length    :  72
+ethers  yParity       :  0
+bitcoin last   1 byte :  01
+bitcoin first  5 bytes:  3045022100
+bitcoin middle 2 bytes:  0220
+
+bitcoin sig length    :  71
+ethers  yParity       :  0
+bitcoin last   1 byte :  01
+bitcoin first  5 bytes:  30440220
+bitcoin middle 2 bytes:  0220
+
+bitcoin sig length    :  71
+ethers  yParity       :  0
+bitcoin last   1 byte :  01
+bitcoin first  5 bytes:  30440220
+bitcoin middle 2 bytes:  0220
+
+bitcoin sig length    :  71
+ethers  yParity       :  1
+bitcoin last   1 byte :  01
+bitcoin first  5 bytes:  30440220
+bitcoin middle 2 bytes:  0220
+
+bitcoin sig length    :  72
+ethers  yParity       :  1
+bitcoin last   1 byte :  01
+bitcoin first  5 bytes:  3045022100
+bitcoin middle 2 bytes:  0220

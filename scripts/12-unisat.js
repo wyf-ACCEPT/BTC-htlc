@@ -130,7 +130,9 @@ async function main() {
    */
   const lpAddress = 'mghW6tWaqMmHsy6C4G9TQgHhqZmTm2SFJ7'
   const userAddress = 'mnGQjw43aNvrA18wsBcPJqiCEibHiQ6awx'
+  const lpPubkeyHex = '033f95d8592987620e92d92541c3291ff8b87c88d1a98208bd3983c655c7f84c77'
   const userPubkeyHex = '03d30a4872dfa2151a59d412a45dff1445d2e11441974472735786418eafe2942d'
+  
 
   const lpAddressHex = bitcoin.address
     .fromBase58Check(lpAddress, network).hash.toString('hex')
@@ -146,7 +148,7 @@ async function main() {
    * Construct the redeem script
    */
   const lockAmount = 2000
-  const expireTs = bip65.encode({ utc: utcNow() - 3600 * 2 })
+  const expireTs = bip65.encode({ utc: utcNow() - 3600 * 4 })
   const encodedSwapHex = "0100350c5280c400a97422bb2acd672000000dbba00065c2326168680f03c602"
 
   const redeemScript = getScriptOutputLock(
@@ -181,7 +183,7 @@ async function main() {
     redeemScript: Buffer.from(redeemScript, 'hex')
   })
 
-  const releaseToUser = true
+  const releaseToUser = false
 
   if (releaseToUser) {
     psbt2.addOutput({
@@ -207,10 +209,20 @@ async function main() {
       address: lpAddress,
       value: 1200,
     })
-    psbt2.setLocktime(utcNow() - 3600)
-    psbt2.signInput(0, lp)
-    psbt2.finalizeInput(0, getFinalizeCancelRelease(redeemScript, lp.publicKey))
-    await broadcastTransaction(psbt2)
+    psbt2.setLocktime(utcNow() - 3600 * 2)  // TODO: minus a bigger number if cannot pass
+
+    console.log(
+      "\nPaste this code snippet into Chrome:",
+      `\n\x1b[32mawait unisat.signPsbt("${psbt2.toHex()}", { autoFinalized: false, toSignInputs: [{ index: 0, address: "${lpAddress}" }]})` +
+      `\x1b[0m`
+    )
+    readlineSync.question('\nPaste your signed psbt (from Chrome) to `../hexstring/psbt-hexstring.txt`. Press Enter to continue...')
+
+    const psbt2signedHex = readFileSync('./hexstring/psbt-hexstring.txt', 'utf8')
+    const psbt2signed = bitcoin.Psbt.fromHex(psbt2signedHex)
+    psbt2signed.finalizeInput(0, getFinalizeCancelRelease(redeemScript, Buffer.from(lpPubkeyHex, 'hex')))
+    await broadcastTransaction(psbt2signed)
+
   }
 
   console.log("\nFinished!")

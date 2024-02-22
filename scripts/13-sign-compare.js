@@ -134,6 +134,7 @@ async function main() {
   // 1. Sign the transaction via unisat or bitcoinjs
   const inputIndex = 0
   psbt1.signInput(inputIndex, lp)
+
   const signatureBtcRaw = psbt1.data.inputs[inputIndex].partialSig[0].signature
   console.log(`\nSignature from bitcoinjs (length = ${signatureBtcRaw.length}): `, 
     signatureBtcRaw.toString('hex'))
@@ -142,8 +143,6 @@ async function main() {
   const signatureBtc = {
     r: '0x' + signatureBtcRawOffset.slice(0, 64),
     s: '0x' + signatureBtcRawOffset.slice(68, 132),
-    // yParity: signatureBtcRaw.toString('hex').slice(140, 142) == '01' ? 1 : 0,
-    // v: 27 + signatureBtcRaw.toString('hex').slice(140, 142) == '01' ? 1 : 0,
     serialized: '0x' + signatureBtcRawOffset.slice(0, 64) + signatureBtcRawOffset.slice(68, 132) + '1c',  // what about v?
   }
 
@@ -164,13 +163,20 @@ async function main() {
 
   console.log("r value is equal: ", signatureBtc.r == signatureEthers.r)
   console.log("s value is equal: ", signatureBtc.s == signatureEthers.s)
-  // console.log("bitcoin sig length   : ", flag)
-  // console.log("ethers  yParity      : ", signatureEthers.yParity)
-  // console.log("bitcoin last 1 bytes : ", signatureBtcRaw.toString('hex').slice(-2))
+  console.log("bitcoin sig length    : ", signatureBtcRaw.length)
+  console.log("ethers  yParity       : ", signatureEthers.yParity)
+  console.log("bitcoin last   1 byte : ", signatureBtcRaw.toString('hex').slice(-2))
+  console.log("bitcoin first  5 bytes: ", signatureBtcRaw.toString('hex').slice(0, 8 + flag * 2))
+  console.log("bitcoin middle 2 bytes: ", signatureBtcRawOffset.slice(64, 68))
 
   // 4. Verify the signature via ethers
   console.log("Recovered address: ", ethers.recoverAddress(txHash, signatureBtc.serialized))
   console.log("Original  address: ", lpEthers.address)
+  console.log(
+    "public key from ethers   : ", 
+    ethers.SigningKey.recoverPublicKey(txHash, signatureBtc.serialized).slice(4, 4 + 64)
+  )
+  console.log("public key from bitcoinjs: ", lp.publicKey.toString('hex').slice(2))
 
   // 5. Verify the signature via solidity
   // @openzeppelin: ECDSA.recover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)
@@ -178,7 +184,6 @@ async function main() {
   // 6. Verify the signature via bitcoin script
   // See the user journey in ./12-unisat.js
 
-  
   psbt1.validateSignaturesOfInput(0, validator)
   psbt1.finalizeAllInputs()
 
@@ -192,6 +197,8 @@ async function main() {
    * 30 44 02 20 7368b42b0a6715ab9380d01475744cd041e37a90cf6817091c22a0a7cb19fd7f
    *       02 20 3e117cf1bf89d30942ca523b040d46b279133d64c6fc06bedfb110bacf7b4886 01
    * 30 45 02 21 00
+   * 
+   * 
    */
 
 

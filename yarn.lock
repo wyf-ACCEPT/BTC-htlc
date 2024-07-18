@@ -85,6 +85,13 @@ bip32@^4.0.0:
     typeforce "^1.11.5"
     wif "^2.0.6"
 
+bip39@^3.1.0:
+  version "3.1.0"
+  resolved "https://registry.npmjs.org/bip39/-/bip39-3.1.0.tgz#c55a418deaf48826a6ceb34ac55b3ee1577e18a3"
+  integrity sha512-c9kiwdk45Do5GL0vJMe7tS95VjCii65mYAH7DfWl3uW8AVzXKQVUm64i3hzVybBDMp9r7j9iNxR85+ul8MdN/A==
+  dependencies:
+    "@noble/hashes" "^1.2.0"
+
 bip65@^1.0.3:
   version "1.0.3"
   resolved "https://registry.npmjs.org/bip65/-/bip65-1.0.3.tgz#60b64adf33c7a8ffacca3bb996f39648b23b0cf8"

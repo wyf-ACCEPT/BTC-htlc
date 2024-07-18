@@ -154,7 +154,7 @@ async function main() {
    * - Or LP unlock after `expireTs` using LP's signature
    */
   const lockAmount = 2000
-  const expireTs = bip65.encode({ utc: utcNow() - 3600 * 3 })
+  const expireTs = bip65.encode({ utc: utcNow() - 3600 * 1.5 })
   const encodedSwapHex = "0100350c5280c400a97422bb2acd672000000dbba00065c2326168680f03c602"
   const redeemScript = getScriptOutputLock(
     encodedSwapHex, expireTs, lpAddressHex, userAddressHex
@@ -229,7 +229,7 @@ async function main() {
       address: lpAddress,
       value: 1200,
     })
-    psbt2.setLocktime(utcNow() - 3600 * 2)
+    psbt2.setLocktime(utcNow() - 3600 * 1)
     psbt2.signInput(0, lp)
     psbt2.finalizeInput(0, getFinalizeCancelRelease(redeemScript, lp.publicKey))
   }

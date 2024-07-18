@@ -133,7 +133,6 @@ async function main() {
   const lpPubkeyHex = '033f95d8592987620e92d92541c3291ff8b87c88d1a98208bd3983c655c7f84c77'
   const userPubkeyHex = '03d30a4872dfa2151a59d412a45dff1445d2e11441974472735786418eafe2942d'
   
-
   const lpAddressHex = bitcoin.address
     .fromBase58Check(lpAddress, network).hash.toString('hex')
   const userAddressHex = bitcoin.address
